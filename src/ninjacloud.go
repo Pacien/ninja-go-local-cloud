@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 )
 
 const APP_NAME = "Ninja Go Local Cloud"
@@ -160,11 +161,20 @@ func copyDir(source string, dest string) (err error) {
 
 //////// REQUEST HANDLERS
 
+func osPath(p string) string {
+	filepath.Clean(p)
+	if runtime.GOOS == "windows" {
+		p = p[:1] + ":" + p[1:]
+	} else {
+		p = "/" + p
+	}
+	return p
+}
+
 //// File APIs
 
 func fileHandler(w http.ResponseWriter, r *http.Request) {
-	p := r.URL.Path[filePathLen:]
-	filepath.Clean(p)
+	p := osPath(r.URL.Path[filePathLen:])
 	if !isInRoot(p) {
 		w.WriteHeader(http.StatusForbidden)
 		return
@@ -277,8 +287,7 @@ func fileHandler(w http.ResponseWriter, r *http.Request) {
 //// Directory APIs
 
 func dirHandler(w http.ResponseWriter, r *http.Request) {
-	p := r.URL.Path[dirPathLen:]
-	filepath.Clean(p)
+	p := osPath(r.URL.Path[dirPathLen:])
 	if !isInRoot(p) {
 		w.WriteHeader(http.StatusForbidden)
 		return
