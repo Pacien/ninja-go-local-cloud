@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 )
 
 const APP_NAME = "Ninja Go Local Cloud"
@@ -32,6 +33,25 @@ const webPathLen = len(webPath)
 //const statusPathLen = len(statusPath)
 
 //////// FILESYSTEM
+
+func properties(path string) (infos os.FileInfo, err error) {
+	infos, err = os.Stat(path)
+	return
+}
+
+func modifiedSince(path string, since string) bool {
+	s, err := strconv.ParseInt(since, 10, 64)
+	infos, err := properties(path)
+	if err != nil {
+		return false
+	}
+	l := infos.ModTime().UnixNano()
+	s = s * 1000000
+	if s > l {
+		return true
+	}
+	return false
+}
 
 func exist(path string) bool {
 	_, err := os.Stat(path)
@@ -63,10 +83,10 @@ func writeFile(path string, content []byte, overwrite bool) (err error) {
 	return
 }
 
-func readFile(path string) (content []byte, err error) {
+/*func readFile(path string) (content []byte, err error) {
 	content, err = ioutil.ReadFile(path)
 	return
-}
+}*/
 
 func removeFile(path string) (err error) {
 	err = os.Remove(path)
@@ -263,11 +283,16 @@ func fileHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	case "GET":
 		// Read an existing file
-		modifiedSince := r.Header.Get("If-modified-since")
-		if modifiedSince != "" {
-			// TODO
-			var test os.FileInfo
-			test.ModTime()
+		modSince := r.Header.Get("If-modified-since")
+		getInfo := r.Header.Get("get-file-info")
+		if modSince != "" && modSince != "false" && modSince != "none" {
+			if modifiedSince(p, modSince) {
+				w.WriteHeader(http.StatusOK)
+				return
+			} else {
+				w.WriteHeader(http.StatusNotModified)
+				return
+			}
 		} else if r.Header.Get("check-existence-only") == "true" {
 			if exist(p) {
 				w.WriteHeader(http.StatusNoContent)
@@ -276,10 +301,30 @@ func fileHandler(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusNotFound)
 				return
 			}
-		} else if r.Header.Get("get-file-info") != "" {
-			// TODO
+		} else if getInfo != "" && getInfo != "false" {
+			infos, err := properties(p)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			modDate := strconv.FormatInt(infos.ModTime().UnixNano(), 10)
+			modDate = modDate[:len(modDate)-6]
+			size := strconv.FormatInt(infos.Size(), 10)
+			fileInfo := map[string]string{
+				"creationDate": modDate, // TODO
+				"modifiedDate": modDate,
+				"size":         size,
+				"readOnly":     "false", // TODO
+			}
+			j, err := json.Marshal(fileInfo)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			w.Write(j)
+			return
 		} else {
-			// TODO
+			http.ServeFile(w, r, p)
 		}
 	}
 }
