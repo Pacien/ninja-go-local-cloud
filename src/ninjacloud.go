@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 )
 
 const APP_NAME = "Ninja Go Local Cloud"
@@ -31,6 +32,15 @@ const dirPathLen = len(dirPath)
 const webPathLen = len(webPath)
 
 //const statusPathLen = len(statusPath)
+
+func sliceContains(s []string, c string) bool {
+	for _, e := range s {
+		if c == e {
+			return true
+		}
+	}
+	return false
+}
 
 //////// FILESYSTEM
 
@@ -133,10 +143,10 @@ func removeDir(path string) (err error) {
 	return
 }
 
-func listDir(path string) (list []os.FileInfo, err error) {
+/*func listDir(path string) (list []os.FileInfo, err error) {
 	list, err = ioutil.ReadDir(path)
 	return
-}
+}*/
 
 func moveDir(source string, dest string) (err error) {
 	err = os.Rename(source, dest)
@@ -173,6 +183,65 @@ func copyDir(source string, dest string) (err error) {
 			err = copyFile(sfp, dfp)
 			if err != nil {
 				return
+			}
+		}
+	}
+	return
+}
+
+type element struct {
+	Type         string    `json:"type"`
+	Name         string    `json:"name"`
+	Uri          string    `json:"uri"`
+	CreationDate string    `json:"creationdate"`
+	ModifiedDate string    `json:"modifieddate"`
+	Size         string    `json:"size"`
+	Writable     string    `json:"writable"`
+	Children     []element `json:"children"`
+}
+
+func listDir(path string, recursive bool, filter []string, returnType string) (list []element, err error) {
+	returnAll := returnType == "all" || returnType == ""
+	returnFiles := returnType == "files" || returnAll
+	returnDirs := returnType == "directories" || returnAll
+	currentDir, err := ioutil.ReadDir(path)
+	for _, d := range currentDir {
+		if d.IsDir() && returnDirs {
+			var e element
+			modTime := strconv.FormatInt(d.ModTime().UnixNano(), 10)
+			modTime = modTime[:len(modTime)-6]
+			uri := filepath.Clean(path + "/" + d.Name())
+			list = append(list, element{})
+			e.Type = "directory"
+			e.Name = d.Name()
+			e.Uri = uri
+			e.CreationDate = modTime // TODO
+			e.ModifiedDate = modTime
+			e.Size = strconv.FormatInt(d.Size(), 10)
+			e.Writable = "true" // TODO
+			if recursive {
+				e.Children, err = listDir(uri, recursive, filter, returnType)
+				if err != nil {
+					return
+				}
+			} else {
+				e.Children = nil
+			}
+			list = append(list, e)
+		} else if !d.IsDir() && returnFiles {
+			if sliceContains(filter, filepath.Ext(d.Name())) {
+				var e element
+				modTime := strconv.FormatInt(d.ModTime().UnixNano(), 10)
+				modTime = modTime[:len(modTime)-6]
+				e.Type = "file"
+				e.Name = d.Name()
+				e.Uri = filepath.Clean(path + "/" + d.Name())
+				e.CreationDate = modTime // TODO
+				e.ModifiedDate = modTime
+				e.Size = strconv.FormatInt(d.Size(), 10)
+				e.Writable = "true" // TODO
+				e.Children = nil
+				list = append(list, e)
 			}
 		}
 	}
@@ -362,7 +431,58 @@ func dirHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	case "GET":
 		// List the contents of an existing directory
-		// TODO
+		modSince := r.Header.Get("If-modified-since")
+		if p == "" {
+			w.Write([]byte(rootFlag))
+			return
+		} else if modSince != "" && modSince != "false" && modSince != "none" {
+			if !exist(p) {
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+			if modifiedSince(p, modSince) {
+				w.WriteHeader(http.StatusOK)
+				return
+			} else {
+				w.WriteHeader(http.StatusNotModified)
+				return
+			}
+		} else if r.Header.Get("check-existence-only") == "true" {
+			if exist(p) {
+				w.WriteHeader(http.StatusNoContent)
+				return
+			} else {
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+		} else {
+			recursive := r.Header.Get("recursive") == "true"
+			filter := strings.Split(r.Header.Get("file-filters"), ";")
+			returnType := r.Header.Get("return-type")
+			if returnType == "" {
+				returnType = "all"
+			}
+			fileInfo, err := listDir(p, recursive, filter, returnType)
+			if err == os.ErrNotExist {
+				w.WriteHeader(http.StatusNotFound)
+				return
+			} else if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			var e element
+			e.Type = "directory"
+			e.Name = "root"
+			e.Uri = p + "/"
+			e.Children = fileInfo
+			j, err := json.Marshal(e)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			w.Write(j)
+			return
+		}
 	case "PUT":
 		// Copy, Move of an existing directory
 		source := r.Header.Get("sourceURI")
