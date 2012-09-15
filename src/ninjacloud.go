@@ -1,6 +1,6 @@
 /*
 
-	This file is part of Ninja Go Local Cloud (https://pacien.net/projects/Ninja Go Local Cloud).
+	This file is part of Ninja Go Local Cloud (https://pacien.net/projects/ninja-go-local-cloud).
 
 	Ninja Go Local Cloud is free software: you can redistribute it and/or modify
 	it under the terms of the GNU Affero General Public License as published by
