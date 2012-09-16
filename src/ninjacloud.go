@@ -638,6 +638,7 @@ func main() {
 	}
 
 	log.Println("Starting " + APP_NAME + " " + APP_VERSION + " on " + interfaceFlag + ":" + portFlag + " in " + rootFlag)
+	log.Println("pacien.net/projects/ninja-go-local-cloud")
 
 	http.HandleFunc(filePath, fileHandler)
 	http.HandleFunc(dirPath, dirHandler)
