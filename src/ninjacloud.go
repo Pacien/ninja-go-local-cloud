@@ -108,7 +108,7 @@ func writeFile(path string, content []byte, overwrite bool) (err error) {
 			return
 		}
 	}
-	err = ioutil.WriteFile(path, content, 0600)
+	err = ioutil.WriteFile(path, content, 0777)
 	return
 }
 
@@ -153,7 +153,7 @@ func copyFile(source string, dest string) (err error) {
 //// Dirs
 
 func createDir(path string) (err error) {
-	err = os.MkdirAll(path, 0600)
+	err = os.MkdirAll(path, 0777)
 	return
 }
 
@@ -246,9 +246,17 @@ func listDir(path string, recursive bool, filter []string, returnType string) (l
 			} else {
 				e.Children = nil
 			}
-			list = append(list, e)
+			if cap(list) > 1 {
+				list = append(list, e)
+			} else {
+				list[0] = e
+			}
 		} else if !d.IsDir() && returnFiles {
-			if sliceContains(filter, filepath.Ext(d.Name())) {
+			ext := filepath.Ext(d.Name())
+			if ext != "" {
+				ext = ext[1:]
+			}
+			if sliceContains(filter, ext) {
 				var e element
 				modTime := strconv.FormatInt(d.ModTime().UnixNano(), 10)
 				modTime = modTime[:len(modTime)-6]
@@ -293,13 +301,17 @@ func fileHandler(w http.ResponseWriter, r *http.Request) {
 		// Create a new file
 		content, err := ioutil.ReadAll(r.Body)
 		if err != nil {
+			log.Println(err)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 		err = writeFile(p, *&content, false)
 		if err == os.ErrExist {
+			log.Println(err)
 			w.WriteHeader(http.StatusBadRequest)
+			return
 		} else if err != nil {
+			log.Println(err)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -311,13 +323,17 @@ func fileHandler(w http.ResponseWriter, r *http.Request) {
 			// Update an existing file (save over existing file)
 			content, err := ioutil.ReadAll(r.Body)
 			if err != nil {
+				log.Println(err)
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
 			err = writeFile(p, *&content, true)
 			if err == os.ErrNotExist {
+				log.Println(err)
 				w.WriteHeader(http.StatusNotFound)
+				return
 			} else if err != nil {
+				log.Println(err)
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
@@ -325,31 +341,41 @@ func fileHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		} else {
 			// Copy, Move of an existing file 
-			if r.Header.Get("overwrite-destination") == "true" {
-				err := removeFile(p)
-				if err == os.ErrNotExist {
-					w.WriteHeader(http.StatusNotFound)
-					return
-				} else if err != nil {
+			if r.Header.Get("overwrite-destination") != "true" {
+				if exist(p) {
 					w.WriteHeader(http.StatusInternalServerError)
 					return
 				}
+				/*err := removeFile(p)
+				if err == os.ErrNotExist {
+					log.Println(err)
+					w.WriteHeader(http.StatusNotFound)
+					return
+				} else if err != nil {
+					log.Println(err)
+					w.WriteHeader(http.StatusInternalServerError)
+					return
+				}*/
 			}
 			if r.Header.Get("delete-source") == "true" {
 				err := moveFile(source, p)
 				if err == os.ErrNotExist {
+					log.Println(err)
 					w.WriteHeader(http.StatusNotFound)
 					return
 				} else if err != nil {
+					log.Println(err)
 					w.WriteHeader(http.StatusInternalServerError)
 					return
 				}
 			} else {
 				err := copyFile(source, p)
 				if err == os.ErrNotExist {
+					log.Println(err)
 					w.WriteHeader(http.StatusNotFound)
 					return
 				} else if err != nil {
+					log.Println(err)
 					w.WriteHeader(http.StatusInternalServerError)
 					return
 				}
@@ -359,11 +385,17 @@ func fileHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	case "DELETE":
 		// Delete an existing file
+		if !exist(p) {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
 		err := removeFile(p)
 		if err == os.ErrNotExist {
+			log.Println(err)
 			w.WriteHeader(http.StatusNotFound)
 			return
 		} else if err != nil {
+			log.Println(err)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -392,6 +424,7 @@ func fileHandler(w http.ResponseWriter, r *http.Request) {
 		} else if getInfo != "" && getInfo != "false" {
 			infos, err := properties(p)
 			if err != nil {
+				log.Println(err)
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
@@ -404,8 +437,9 @@ func fileHandler(w http.ResponseWriter, r *http.Request) {
 				"size":         size,
 				"readOnly":     "false", // TODO
 			}
-			j, err := json.Marshal(fileInfo)
+			j, err := json.MarshalIndent(fileInfo, "", "	")
 			if err != nil {
+				log.Println(err)
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
@@ -431,6 +465,7 @@ func dirHandler(w http.ResponseWriter, r *http.Request) {
 		// Create a new directory
 		err := createDir(p)
 		if err != nil {
+			log.Println(err)
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
@@ -438,11 +473,17 @@ func dirHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	case "DELETE":
 		// Delete an existing directory
+		if !exist(p) {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
 		err := removeDir(p)
 		if err == os.ErrNotExist {
+			log.Println(err)
 			w.WriteHeader(http.StatusNotFound)
 			return
 		} else if err != nil {
+			log.Println(err)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -483,19 +524,34 @@ func dirHandler(w http.ResponseWriter, r *http.Request) {
 			}
 			fileInfo, err := listDir(p, recursive, filter, returnType)
 			if err == os.ErrNotExist {
+				log.Println(err)
 				w.WriteHeader(http.StatusNotFound)
 				return
 			} else if err != nil {
+				log.Println(err)
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
 			var e element
+			rootDir, err := properties(p)
+			if err != nil {
+				log.Println(err)
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			modTime := strconv.FormatInt(rootDir.ModTime().UnixNano(), 10)
+			modTime = modTime[:len(modTime)-6]
 			e.Type = "directory"
 			e.Name = "root"
-			e.Uri = p + "/"
+			e.Uri = p
+			e.CreationDate = modTime // TODO
+			e.ModifiedDate = modTime
+			e.Size = strconv.FormatInt(rootDir.Size(), 10)
+			e.Writable = "true" // TODO
 			e.Children = fileInfo
-			j, err := json.Marshal(e)
+			j, err := json.MarshalIndent(e, "", "	")
 			if err != nil {
+				log.Println(err)
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
@@ -513,18 +569,22 @@ func dirHandler(w http.ResponseWriter, r *http.Request) {
 		if operation == "move" {
 			err := moveDir(source, p)
 			if err == os.ErrNotExist {
+				log.Println(err)
 				w.WriteHeader(http.StatusNotFound)
 				return
 			} else if err != nil {
+				log.Println(err)
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
 		} else if operation == "copy" {
 			err := copyDir(source, p)
 			if err == os.ErrNotExist {
+				log.Println(err)
 				w.WriteHeader(http.StatusNotFound)
 				return
 			} else if err != nil {
+				log.Println(err)
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
@@ -553,7 +613,7 @@ func getStatusHandler(w http.ResponseWriter, r *http.Request) {
 		"server-root": rootFlag,
 		"status":      "running",
 	}
-	j, err := json.Marshal(cloudStatus)
+	j, err := json.MarshalIndent(cloudStatus, "", "	")
 	if err != nil {
 		log.Println(err)
 	}
