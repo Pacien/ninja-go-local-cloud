@@ -44,7 +44,7 @@ var rootFlag string
 const filePath = "/file/"
 const dirPath = "/directory/"
 const webPath = "/web?url="
-const statusPath = "/cloudstatus"
+const statusPath = "/cloudstatus/"
 
 const filePathLen = len(filePath)
 const dirPathLen = len(dirPath)
