@@ -28,7 +28,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 )
@@ -41,11 +40,15 @@ var interfaceFlag string
 var portFlag string
 var rootFlag string
 
+const driveName = "Z"
+const drivePrefix = driveName + ":/"
+
 const filePath = "/file/"
 const dirPath = "/directory/"
 const webPath = "/web?url="
 const statusPath = "/cloudstatus/"
 
+const drivePrefixLen = len(drivePrefix) - 1
 const filePathLen = len(filePath)
 const dirPathLen = len(dirPath)
 const webPathLen = len(webPath)
@@ -233,7 +236,7 @@ func listDir(path string, recursive bool, filter []string, returnType string) (l
 			list = append(list, element{})
 			e.Type = "directory"
 			e.Name = d.Name()
-			e.Uri = uri
+			e.Uri = filepath.Clean(drivePrefix + uri)
 			e.CreationDate = modTime // TODO
 			e.ModifiedDate = modTime
 			e.Size = strconv.FormatInt(d.Size(), 10)
@@ -256,13 +259,13 @@ func listDir(path string, recursive bool, filter []string, returnType string) (l
 			if ext != "" {
 				ext = ext[1:]
 			}
-			if sliceContains(filter, ext) {
+			if cap(filter) == 1 || sliceContains(filter, ext) {
 				var e element
 				modTime := strconv.FormatInt(d.ModTime().UnixNano(), 10)
 				modTime = modTime[:len(modTime)-6]
 				e.Type = "file"
 				e.Name = d.Name()
-				e.Uri = filepath.Clean(path + "/" + d.Name())
+				e.Uri = filepath.Clean(drivePrefix + path + "/" + d.Name())
 				e.CreationDate = modTime // TODO
 				e.ModifiedDate = modTime
 				e.Size = strconv.FormatInt(d.Size(), 10)
@@ -277,22 +280,13 @@ func listDir(path string, recursive bool, filter []string, returnType string) (l
 
 //////// REQUEST HANDLERS
 
-func osPath(p string) string {
-	filepath.Clean(p)
-	if runtime.GOOS == "windows" {
-		p = p[:1] + ":" + p[1:]
-	} else {
-		p = "/" + p
-	}
-	return p
-}
-
 //// File APIs
 
 func fileHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Cache-Control", "no-cache")
-	p := osPath(r.URL.Path[filePathLen:])
-	if !isInRoot(p) {
+	p := filepath.Clean(r.URL.Path[filePathLen:])
+	p = strings.TrimLeft(p, driveName+"/")
+	if filepath.IsAbs(p) {
 		w.WriteHeader(http.StatusForbidden)
 		return
 	}
@@ -456,8 +450,9 @@ func fileHandler(w http.ResponseWriter, r *http.Request) {
 
 func dirHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Cache-Control", "no-cache")
-	p := osPath(r.URL.Path[dirPathLen:])
-	if !isInRoot(p) {
+	p := filepath.Clean(r.URL.Path[dirPathLen:])
+	p = strings.TrimLeft(p, driveName+"/")
+	if filepath.IsAbs(p) {
 		w.WriteHeader(http.StatusForbidden)
 		return
 	}
@@ -534,6 +529,7 @@ func dirHandler(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
+			var j []byte
 			var e element
 			rootDir, err := properties(p)
 			if err != nil {
@@ -544,14 +540,14 @@ func dirHandler(w http.ResponseWriter, r *http.Request) {
 			modTime := strconv.FormatInt(rootDir.ModTime().UnixNano(), 10)
 			modTime = modTime[:len(modTime)-6]
 			e.Type = "directory"
-			e.Name = "root"
-			e.Uri = p
+			e.Name = rootDir.Name()
+			e.Uri = filepath.Clean(drivePrefix + p)
 			e.CreationDate = modTime // TODO
 			e.ModifiedDate = modTime
 			e.Size = strconv.FormatInt(rootDir.Size(), 10)
 			e.Writable = "true" // TODO
 			e.Children = fileInfo
-			j, err := json.MarshalIndent(e, "", "	")
+			j, err = json.MarshalIndent(e, "", "	")
 			if err != nil {
 				log.Println(err)
 				w.WriteHeader(http.StatusInternalServerError)
@@ -613,7 +609,7 @@ func getStatusHandler(w http.ResponseWriter, r *http.Request) {
 	cloudStatus := map[string]string{
 		"name":        APP_NAME,
 		"version":     APP_VERSION,
-		"server-root": rootFlag,
+		"server-root": "",
 		"status":      "running",
 	}
 	j, err := json.MarshalIndent(cloudStatus, "", "	")
@@ -648,7 +644,8 @@ func main() {
 	http.HandleFunc(webPath, getDataHandler)
 	http.HandleFunc(statusPath, getStatusHandler)
 
-	err := http.ListenAndServe(interfaceFlag+":"+portFlag, nil)
+	err := os.Chdir(rootFlag)
+	err = http.ListenAndServe(interfaceFlag+":"+portFlag, nil)
 	if err != nil {
 		log.Println(err)
 		return
