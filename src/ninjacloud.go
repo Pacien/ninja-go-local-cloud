@@ -285,7 +285,9 @@ func listDir(path string, recursive bool, filter []string, returnType string) (l
 func fileHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Cache-Control", "no-cache")
 	p := filepath.Clean(r.URL.Path[filePathLen:])
-	p = strings.TrimLeft(p, driveName+"/")
+	p = strings.TrimLeft(p, driveName)
+	p = strings.TrimLeft(p, "/")
+	p = strings.TrimLeft(p, "\\")
 	if filepath.IsAbs(p) {
 		w.WriteHeader(http.StatusForbidden)
 		return
@@ -465,7 +467,9 @@ func fileHandler(w http.ResponseWriter, r *http.Request) {
 func dirHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Cache-Control", "no-cache")
 	p := filepath.Clean(r.URL.Path[dirPathLen:])
-	p = strings.TrimLeft(p, driveName+"/")
+	p = strings.TrimLeft(p, driveName)
+	p = strings.TrimLeft(p, "/")
+	p = strings.TrimLeft(p, "\\")
 	if filepath.IsAbs(p) {
 		w.WriteHeader(http.StatusForbidden)
 		return
