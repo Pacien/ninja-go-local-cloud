@@ -290,6 +290,7 @@ func osPath(p string) string {
 //// File APIs
 
 func fileHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Add("Cache-Control", "no-cache")
 	p := osPath(r.URL.Path[filePathLen:])
 	if !isInRoot(p) {
 		w.WriteHeader(http.StatusForbidden)
@@ -454,6 +455,7 @@ func fileHandler(w http.ResponseWriter, r *http.Request) {
 //// Directory APIs
 
 func dirHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Add("Cache-Control", "no-cache")
 	p := osPath(r.URL.Path[dirPathLen:])
 	if !isInRoot(p) {
 		w.WriteHeader(http.StatusForbidden)
@@ -607,6 +609,7 @@ func getDataHandler(w http.ResponseWriter, r *http.Request) {
 
 // Get the cloud status JSON
 func getStatusHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Add("Cache-Control", "no-cache")
 	cloudStatus := map[string]string{
 		"name":        APP_NAME,
 		"version":     APP_VERSION,
