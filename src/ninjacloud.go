@@ -618,11 +618,10 @@ func getDataHandler(w http.ResponseWriter, r *http.Request) {
 
 // Get the cloud status JSON
 func getStatusHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Add("Cache-Control", "no-cache")
 	cloudStatus := map[string]string{
 		"name":        APP_NAME,
 		"version":     APP_VERSION,
-		"server-root": "",
+		"server-root": drivePrefix,
 		"status":      "running",
 	}
 	j, err := json.MarshalIndent(cloudStatus, "", "	")
@@ -649,7 +648,14 @@ func main() {
 		return
 	}
 
-	log.Println("Starting " + APP_NAME + " " + APP_VERSION + " on " + interfaceFlag + ":" + portFlag + " in " + rootFlag)
+	err := os.Chdir(rootFlag)
+	currentDir, err := os.Getwd()
+	if err != nil {
+		log.Println(err)
+		return
+	}
+
+	log.Println("Starting " + APP_NAME + " " + APP_VERSION + " on " + interfaceFlag + ":" + portFlag + " in " + currentDir)
 	log.Println("pacien.net/projects/ninja-go-local-cloud")
 
 	http.HandleFunc(filePath, fileHandler)
@@ -657,7 +663,6 @@ func main() {
 	http.HandleFunc(webPath, getDataHandler)
 	http.HandleFunc(statusPath, getStatusHandler)
 
-	err := os.Chdir(rootFlag)
 	err = http.ListenAndServe(interfaceFlag+":"+portFlag, nil)
 	if err != nil {
 		log.Println(err)
