@@ -115,10 +115,10 @@ func writeFile(path string, content []byte, overwrite bool) (err error) {
 	return
 }
 
-/*func readFile(path string) (content []byte, err error) {
+func readFile(path string) (content []byte, err error) {
 	content, err = ioutil.ReadFile(path)
 	return
-}*/
+}
 
 func removeFile(path string) (err error) {
 	err = os.Remove(path)
@@ -441,7 +441,21 @@ func fileHandler(w http.ResponseWriter, r *http.Request) {
 			w.Write(j)
 			return
 		} else {
-			http.ServeFile(w, r, p)
+			ext := filepath.Ext(p)
+			if ext == ".htm" || ext == ".html" {
+				file, err := readFile(p)
+				if err != nil {
+					log.Println(err)
+					w.WriteHeader(http.StatusInternalServerError)
+					return
+				}
+				w.Header().Set("Content-Type", "text/plain, charset=utf-8")
+				w.WriteHeader(http.StatusOK)
+				w.Write(file)
+				return
+			} else {
+				http.ServeFile(w, r, p)
+			}
 		}
 	}
 }
