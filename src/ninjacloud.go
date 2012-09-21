@@ -233,7 +233,6 @@ func listDir(path string, recursive bool, filter []string, returnType string) (l
 			modTime := strconv.FormatInt(d.ModTime().UnixNano(), 10)
 			modTime = modTime[:len(modTime)-6]
 			uri := filepath.Clean(path + "/" + d.Name())
-			list = append(list, element{})
 			e.Type = "directory"
 			e.Name = d.Name()
 			e.Uri = filepath.Clean(drivePrefix + uri)
@@ -249,11 +248,7 @@ func listDir(path string, recursive bool, filter []string, returnType string) (l
 			} else {
 				e.Children = nil
 			}
-			if cap(list) > 1 {
-				list = append(list, e)
-			} else {
-				list[0] = e
-			}
+			list = append(list, e)
 		} else if !d.IsDir() && returnFiles {
 			ext := filepath.Ext(d.Name())
 			if ext != "" {
