@@ -445,20 +445,23 @@ func fileHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		} else {
 			ext := filepath.Ext(p)
-			if ext == ".htm" || ext == ".html" {
-				file, err := readFile(p)
-				if err != nil {
-					log.Println(err)
-					w.WriteHeader(http.StatusInternalServerError)
-					return
-				}
+			switch ext {
+			case ".htm":
+			case ".html":
 				w.Header().Set("Content-Type", "text/plain, charset=utf-8")
-				w.WriteHeader(http.StatusOK)
-				w.Write(file)
-				return
-			} else {
-				http.ServeFile(w, r, p)
+
+			case ".json":
+				w.Header().Set("Content-Type", "application/json")
 			}
+			file, err := readFile(p)
+			if err != nil {
+				log.Println(err)
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+			w.Write(file)
+			return
 		}
 	}
 }
@@ -664,7 +667,7 @@ func main() {
 		log.Println(err)
 		return
 	}
-	
+
 	err = createDir(projectsDir)
 	if err != nil {
 		log.Println(err)
