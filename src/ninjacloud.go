@@ -279,6 +279,10 @@ func listDir(path string, recursive bool, filter []string, returnType string) (l
 
 func fileHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Cache-Control", "no-cache")
+	w.Header().Add("Access-Control-Allow-Headers", "Content-Type, sourceURI, overwrite-destination, check-existence-only, recursive, return-type, operation, delete-source, file-filters, if-modified-since, get-file-info")
+	w.Header().Add("Access-Control-Allow-Methods", "POST, GET, DELETE, PUT")
+	w.Header().Add("Access-Control-Allow-Origin", "*/*")
+	w.Header().Add("Access-Control-Max-Age", "86400")
 	p := filepath.Clean(r.URL.Path[filePathLen:])
 	p = strings.TrimLeft(p, driveName)
 	p = strings.TrimLeft(p, "/")
@@ -461,6 +465,10 @@ func fileHandler(w http.ResponseWriter, r *http.Request) {
 
 func dirHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Cache-Control", "no-cache")
+	w.Header().Add("Access-Control-Allow-Headers", "Content-Type, sourceURI, overwrite-destination, check-existence-only, recursive, return-type, operation, delete-source, file-filters, if-modified-since, get-file-info")
+	w.Header().Add("Access-Control-Allow-Methods", "POST, GET, DELETE, PUT")
+	w.Header().Add("Access-Control-Allow-Origin", "*/*")
+	w.Header().Add("Access-Control-Max-Age", "86400")
 	p := filepath.Clean(r.URL.Path[dirPathLen:])
 	p = strings.TrimLeft(p, driveName)
 	p = strings.TrimLeft(p, "/")
