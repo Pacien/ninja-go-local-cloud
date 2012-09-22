@@ -234,10 +234,12 @@ func listDir(path string, recursive bool, filter []string, returnType string) (l
 			var e element
 			modTime := strconv.FormatInt(d.ModTime().UnixNano(), 10)
 			modTime = modTime[:len(modTime)-6]
-			uri := filepath.Clean(path + "/" + d.Name())
+			uri := path + "/" + d.Name()
+			uri = filepath.Clean(drivePrefix + projectsDir + "/" + uri)
+			uri = filepath.ToSlash(uri)
 			e.Type = "directory"
 			e.Name = d.Name()
-			e.Uri = filepath.Clean(drivePrefix + projectsDir + "/" + uri)
+			e.Uri = uri
 			e.CreationDate = modTime // TODO
 			e.ModifiedDate = modTime
 			e.Size = strconv.FormatInt(d.Size(), 10)
@@ -260,9 +262,11 @@ func listDir(path string, recursive bool, filter []string, returnType string) (l
 				var e element
 				modTime := strconv.FormatInt(d.ModTime().UnixNano(), 10)
 				modTime = modTime[:len(modTime)-6]
+				uri := filepath.Clean(drivePrefix + projectsDir + "/" + path + "/" + d.Name())
+				uri = filepath.ToSlash(uri)
 				e.Type = "file"
 				e.Name = d.Name()
-				e.Uri = filepath.Clean(drivePrefix + projectsDir + "/" + path + "/" + d.Name())
+				e.Uri = uri
 				e.CreationDate = modTime // TODO
 				e.ModifiedDate = modTime
 				e.Size = strconv.FormatInt(d.Size(), 10)
