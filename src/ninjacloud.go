@@ -43,6 +43,8 @@ var rootFlag string
 const driveName = "Z"
 const drivePrefix = driveName + ":/"
 
+const projectsDir = "Ninja"
+
 const filePath = "/file/"
 const dirPath = "/directory/"
 const webPath = "/web?url="
@@ -629,7 +631,7 @@ func getStatusHandler(w http.ResponseWriter, r *http.Request) {
 	cloudStatus := map[string]string{
 		"name":        APP_NAME,
 		"version":     APP_VERSION,
-		"server-root": drivePrefix,
+		"server-root": drivePrefix + projectsDir,
 		"status":      "running",
 	}
 	j, err := json.MarshalIndent(cloudStatus, "", "	")
@@ -658,6 +660,12 @@ func main() {
 
 	err := os.Chdir(rootFlag)
 	currentDir, err := os.Getwd()
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	
+	err = createDir(projectsDir)
 	if err != nil {
 		log.Println(err)
 		return
