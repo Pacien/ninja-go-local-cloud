@@ -215,8 +215,8 @@ type element struct {
 	Type         string    `json:"type"`
 	Name         string    `json:"name"`
 	Uri          string    `json:"uri"`
-	CreationDate string    `json:"creationdate"`
-	ModifiedDate string    `json:"modifieddate"`
+	CreationDate string    `json:"creationDate"`
+	ModifiedDate string    `json:"modifiedDate"`
 	Size         string    `json:"size"`
 	Writable     string    `json:"writable"`
 	Children     []element `json:"children"`
