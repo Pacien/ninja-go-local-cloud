@@ -237,7 +237,7 @@ func listDir(path string, recursive bool, filter []string, returnType string) (l
 			uri := filepath.Clean(path + "/" + d.Name())
 			e.Type = "directory"
 			e.Name = d.Name()
-			e.Uri = filepath.Clean(drivePrefix + uri)
+			e.Uri = filepath.Clean(drivePrefix + projectsDir + "/" + uri)
 			e.CreationDate = modTime // TODO
 			e.ModifiedDate = modTime
 			e.Size = strconv.FormatInt(d.Size(), 10)
@@ -262,7 +262,7 @@ func listDir(path string, recursive bool, filter []string, returnType string) (l
 				modTime = modTime[:len(modTime)-6]
 				e.Type = "file"
 				e.Name = d.Name()
-				e.Uri = filepath.Clean(drivePrefix + path + "/" + d.Name())
+				e.Uri = filepath.Clean(drivePrefix + projectsDir + "/" + path + "/" + d.Name())
 				e.CreationDate = modTime // TODO
 				e.ModifiedDate = modTime
 				e.Size = strconv.FormatInt(d.Size(), 10)
@@ -286,9 +286,8 @@ func fileHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Access-Control-Allow-Origin", "*/*")
 	w.Header().Add("Access-Control-Max-Age", "86400")
 	p := filepath.Clean(r.URL.Path[filePathLen:])
-	p = strings.TrimLeft(p, driveName)
-	p = strings.TrimLeft(p, "/")
-	p = strings.TrimLeft(p, "\\")
+	p = filepath.ToSlash(p)
+	p = strings.TrimLeft(p, driveName+"/"+projectsDir+"/")
 	if filepath.IsAbs(p) {
 		w.WriteHeader(http.StatusForbidden)
 		return
@@ -475,9 +474,8 @@ func dirHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Access-Control-Allow-Origin", "*/*")
 	w.Header().Add("Access-Control-Max-Age", "86400")
 	p := filepath.Clean(r.URL.Path[dirPathLen:])
-	p = strings.TrimLeft(p, driveName)
-	p = strings.TrimLeft(p, "/")
-	p = strings.TrimLeft(p, "\\")
+	p = filepath.ToSlash(p)
+	p = strings.TrimLeft(p, driveName+"/"+projectsDir+"/")
 	if filepath.IsAbs(p) {
 		w.WriteHeader(http.StatusForbidden)
 		return
@@ -515,10 +513,7 @@ func dirHandler(w http.ResponseWriter, r *http.Request) {
 	case "GET":
 		// List the contents of an existing directory
 		modSince := r.Header.Get("If-modified-since")
-		if p == "" {
-			w.Write([]byte(rootFlag))
-			return
-		} else if modSince != "" && modSince != "false" && modSince != "none" {
+		if modSince != "" && modSince != "false" && modSince != "none" {
 			if !exist(p) {
 				w.WriteHeader(http.StatusNotFound)
 				return
@@ -545,35 +540,49 @@ func dirHandler(w http.ResponseWriter, r *http.Request) {
 			if returnType == "" {
 				returnType = "all"
 			}
-			fileInfo, err := listDir(p, recursive, filter, returnType)
-			if err == os.ErrNotExist {
-				log.Println(err)
-				w.WriteHeader(http.StatusNotFound)
-				return
-			} else if err != nil {
-				log.Println(err)
-				w.WriteHeader(http.StatusInternalServerError)
-				return
-			}
-			var j []byte
 			var e element
-			rootDir, err := properties(p)
-			if err != nil {
-				log.Println(err)
-				w.WriteHeader(http.StatusInternalServerError)
-				return
+			if p == "." {
+				var c []element
+				var n element
+				n.Type = "directory"
+				n.Name = projectsDir
+				n.Uri = drivePrefix + projectsDir
+				c = append(c, n)
+				e.Type = "directory"
+				e.Children = c
+			} else {
+				if p == "" {
+					p = "."
+				}
+				fileInfo, err := listDir(p, recursive, filter, returnType)
+				if err == os.ErrNotExist {
+					log.Println(err)
+					w.WriteHeader(http.StatusNotFound)
+					return
+				} else if err != nil {
+					log.Println(err)
+					w.WriteHeader(http.StatusInternalServerError)
+					return
+				}
+				rootDir, err := properties(p)
+				if err != nil {
+					log.Println(err)
+					w.WriteHeader(http.StatusInternalServerError)
+					return
+				}
+				modTime := strconv.FormatInt(rootDir.ModTime().UnixNano(), 10)
+				modTime = modTime[:len(modTime)-6]
+				e.Type = "directory"
+				e.Name = rootDir.Name()
+				e.Uri = drivePrefix + p
+				e.CreationDate = modTime // TODO
+				e.ModifiedDate = modTime
+				e.Size = strconv.FormatInt(rootDir.Size(), 10)
+				e.Writable = "true" // TODO
+				e.Children = fileInfo
 			}
-			modTime := strconv.FormatInt(rootDir.ModTime().UnixNano(), 10)
-			modTime = modTime[:len(modTime)-6]
-			e.Type = "directory"
-			e.Name = rootDir.Name()
-			e.Uri = filepath.Clean(drivePrefix + p)
-			e.CreationDate = modTime // TODO
-			e.ModifiedDate = modTime
-			e.Size = strconv.FormatInt(rootDir.Size(), 10)
-			e.Writable = "true" // TODO
-			e.Children = fileInfo
-			j, err = json.MarshalIndent(e, "", "	")
+
+			j, err := json.MarshalIndent(e, "", "	")
 			if err != nil {
 				log.Println(err)
 				w.WriteHeader(http.StatusInternalServerError)
@@ -661,14 +670,16 @@ func main() {
 		return
 	}
 
-	err := os.Chdir(rootFlag)
-	currentDir, err := os.Getwd()
+	root := filepath.Clean((rootFlag + "/" + projectsDir))
+
+	err := createDir(root)
 	if err != nil {
 		log.Println(err)
 		return
 	}
 
-	err = createDir(projectsDir)
+	err = os.Chdir(root)
+	currentDir, err := os.Getwd()
 	if err != nil {
 		log.Println(err)
 		return
@@ -681,7 +692,7 @@ func main() {
 	http.HandleFunc(dirPath, dirHandler)
 	http.HandleFunc(webPath, getDataHandler)
 	http.HandleFunc(statusPath, getStatusHandler)
-	http.Handle("/", http.FileServer(http.Dir(projectsDir)))
+	http.Handle("/", http.FileServer(http.Dir(root)))
 
 	err = http.ListenAndServe(interfaceFlag+":"+portFlag, nil)
 	if err != nil {
