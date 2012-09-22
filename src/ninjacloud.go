@@ -681,6 +681,7 @@ func main() {
 	http.HandleFunc(dirPath, dirHandler)
 	http.HandleFunc(webPath, getDataHandler)
 	http.HandleFunc(statusPath, getStatusHandler)
+	http.Handle("/", http.FileServer(http.Dir(projectsDir)))
 
 	err = http.ListenAndServe(interfaceFlag+":"+portFlag, nil)
 	if err != nil {
